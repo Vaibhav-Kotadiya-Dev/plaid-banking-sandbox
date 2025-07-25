@@ -26,16 +26,37 @@ export async function exchangePublicToken(public_token: string) {
   return plaidClient.itemPublicTokenExchange({ public_token });
 }
 
-export async function getTransactions(access_token: string) {
+export async function getInstitution(access_token: string) {
+  const itemResponse = await plaidClient.itemGet({ access_token });
+  const institution_id = itemResponse.data.item.institution_id;
+  if (!institution_id) return null;
+  const instResponse = await plaidClient.institutionsGetById({
+    institution_id,
+    country_codes: [CountryCode.Us],
+    options: {
+      include_optional_metadata: true
+    }
+  });
+  return instResponse.data.institution;
+}
+
+export async function getTransactionsWithInstitution(access_token: string, start_date?: string) {
   const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+  const startDate = start_date || new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
     .toISOString()
     .slice(0, 10);
   const endDate = now.toISOString().slice(0, 10);
-  return plaidClient.transactionsGet({
-    access_token,
-    start_date: startDate,
-    end_date: endDate,
-    options: { count: 20, offset: 0 },
-  });
+  const [transactionsRes, institution] = await Promise.all([
+    plaidClient.transactionsGet({
+      access_token,
+      start_date: startDate,
+      end_date: endDate,
+      options: { count: 20, offset: 0 },
+    }),
+    getInstitution(access_token),
+  ]);
+  return {
+    transactions: transactionsRes.data.transactions,
+    institution,
+  };
 } 
